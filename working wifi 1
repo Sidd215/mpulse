@@ -1,3 +1,7 @@
+/*
+   RemoteXY setup
+*/
+
 #define REMOTEXY_MODE__ESP32CORE_WIFI_POINT
 
 #include <WiFi.h>
@@ -8,18 +12,17 @@
 #define REMOTEXY_WIFI_PASSWORD "12345678"
 #define REMOTEXY_SERVER_PORT 6377
 
+// RemoteXY configuration
 #pragma pack(push, 1)
-uint8_t RemoteXY_CONF[] = 
+uint8_t RemoteXY_CONF[] =   // this will be auto-generated
 { 
-  255,3,0,0,0,48,0,19,0,0,0,69,83,80,51,50,95,67,65,82,
-  0,8,1,106,200,1,1,2,0,5,9,121,48,48,0,2,26,31,2,57,
-  35,37,17,0,2,26,31,31,79,78,0,79,70,70,0 
+  255,0,0,0,0,34,0,13,13,0,
+  5,1,6,6,88,88,2,26,31
 };
 
 struct {
-  int8_t joystick_01_x;
-  int8_t joystick_01_y;
-  uint8_t switch_01;
+  int8_t joystick_x; // -100 to 100
+  int8_t joystick_y; // -100 to 100
 } RemoteXY;
 #pragma pack(pop)
 
@@ -27,24 +30,16 @@ void setup() {
   Serial.begin(115200);
 
   RemoteXY_Init();
-
-  Serial.println("WiFi Started!");
-  Serial.println("Connect to ESP32_CAR");
 }
 
 void loop() {
   RemoteXY_Handler();
 
-  int x = RemoteXY.joystick_01_x;
-  int y = RemoteXY.joystick_01_y;
+  int x = RemoteXY.joystick_x;
+  int y = RemoteXY.joystick_y;
 
   Serial.print("X: ");
   Serial.print(x);
   Serial.print(" | Y: ");
   Serial.println(y);
-
-  // optional switch
-  if (RemoteXY.switch_01) {
-    Serial.println("Switch ON");
-  }
 }
