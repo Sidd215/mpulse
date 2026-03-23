@@ -125,44 +125,45 @@ void loop() {
   } 
 
   // ================= AUTO MODE =================
-  else {
+// ================= AUTO MODE =================
+else {
 
-    int leftIR  = digitalRead(IR_LEFT);
-    int rightIR = digitalRead(IR_RIGHT);
+  int leftIR  = digitalRead(IR_LEFT);
+  int rightIR = digitalRead(IR_RIGHT);
 
-    // DEBUG (see values in Serial Monitor)
-    Serial.print("L: ");
-    Serial.print(leftIR);
-    Serial.print("  R: ");
-    Serial.println(rightIR);
+  Serial.print("L: ");
+  Serial.print(leftIR);
+  Serial.print("  R: ");
+  Serial.println(rightIR);
 
-    int baseSpeed = 150;
-    int turnSpeed = 120;
+  int baseSpeed = 50;
+  int turnSpeed = 50;
 
-    // Assuming BLACK line = LOW
-    if (leftIR == LOW && rightIR == LOW) {
-      // Forward
-      currentLeft  = smooth(currentLeft, baseSpeed);
-      currentRight = smooth(currentRight, baseSpeed);
-    }
-    else if (leftIR == LOW && rightIR == HIGH) {
-      // Turn LEFT
-      currentLeft  = smooth(currentLeft, turnSpeed);
-      currentRight = smooth(currentRight, baseSpeed);
-    }
-    else if (leftIR == HIGH && rightIR == LOW) {
-      // Turn RIGHT
-      currentLeft  = smooth(currentLeft, baseSpeed);
-      currentRight = smooth(currentRight, turnSpeed);
-    }
-    else {
-      // Line lost → spin to search
-      currentLeft  = smooth(currentLeft, 120);
-      currentRight = smooth(currentRight, -120);
-    }
-
-    setMotor(currentLeft, currentRight);
+  // 00 → FORWARD
+  if (leftIR == LOW && rightIR == LOW) {
+    currentLeft  = smooth(currentLeft, baseSpeed);
+    currentRight = smooth(currentRight, baseSpeed);
   }
 
+  // 11 → STOP
+  else if (leftIR == HIGH && rightIR == HIGH) {
+    currentLeft  = smooth(currentLeft, 0);
+    currentRight = smooth(currentRight, 0);
+  }
+
+  // 10 → TURN LEFT ON SPOT
+  else if (leftIR == HIGH && rightIR == LOW) {
+    currentLeft  = smooth(currentLeft, turnSpeed);     // forward
+    currentRight = smooth(currentRight, -turnSpeed);   // backward
+  }
+
+  // 01 → TURN RIGHT ON SPOT
+  else if (leftIR == LOW && rightIR == HIGH) {
+    currentLeft  = smooth(currentLeft, -turnSpeed);    // backward
+    currentRight = smooth(currentRight, turnSpeed);    // forward
+  }
+
+  setMotor(currentLeft, currentRight);
+}
   delay(5);
 }
