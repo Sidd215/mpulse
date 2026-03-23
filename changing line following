@@ -10,7 +10,6 @@
 
 #pragma pack(push, 1)
 
-// ✅ UPDATED CONFIG (auto return joystick)
 uint8_t RemoteXY_CONF[] = 
 { 
   255,3,0,0,0,48,0,19,0,0,0,69,83,80,51,50,95,67,65,82,
@@ -18,7 +17,6 @@ uint8_t RemoteXY_CONF[] =
   78,0,79,70,70,0,5,12,65,60,60,32,2,26,31 
 };
 
-// ✅ UPDATED STRUCT (matches config)
 struct {
   uint8_t switch_01;
   int8_t joystick_01_x;
@@ -59,6 +57,8 @@ int smooth(int current, int target, int step = 10) {
 }
 
 void setMotor(int left, int right) {
+
+  // LEFT motor
   if (left >= 0) {
     digitalWrite(IN1, HIGH);
     digitalWrite(IN2, LOW);
@@ -68,6 +68,7 @@ void setMotor(int left, int right) {
     left = -left;
   }
 
+  // RIGHT motor
   if (right >= 0) {
     digitalWrite(IN3, HIGH);
     digitalWrite(IN4, LOW);
@@ -80,6 +81,7 @@ void setMotor(int left, int right) {
   left = constrain(left, 0, 255);
   right = constrain(right, 0, 255);
 
+  // Using analogWrite
   analogWrite(ENA, left);
   analogWrite(ENB, right);
 }
@@ -122,34 +124,45 @@ void loop() {
     setMotor(currentLeft, currentRight);
   } 
 
-  // ================= LINE FOLLOW MODE =================
+  // ================= AUTO MODE =================
   else {
 
     int leftIR  = digitalRead(IR_LEFT);
     int rightIR = digitalRead(IR_RIGHT);
 
-    int baseSpeed = 160;
-    int turnSpeed = 100;
+    // DEBUG (see values in Serial Monitor)
+    Serial.print("L: ");
+    Serial.print(leftIR);
+    Serial.print("  R: ");
+    Serial.println(rightIR);
 
-    if (leftIR == HIGH && rightIR == HIGH) {
+    int baseSpeed = 150;
+    int turnSpeed = 120;
+
+    // Assuming BLACK line = LOW
+    if (leftIR == LOW && rightIR == LOW) {
+      // Forward
       currentLeft  = smooth(currentLeft, baseSpeed);
       currentRight = smooth(currentRight, baseSpeed);
     }
-    else if (leftIR == HIGH && rightIR == LOW) {
+    else if (leftIR == LOW && rightIR == HIGH) {
+      // Turn LEFT
       currentLeft  = smooth(currentLeft, turnSpeed);
       currentRight = smooth(currentRight, baseSpeed);
     }
-    else if (leftIR == LOW && rightIR == HIGH) {
+    else if (leftIR == HIGH && rightIR == LOW) {
+      // Turn RIGHT
       currentLeft  = smooth(currentLeft, baseSpeed);
       currentRight = smooth(currentRight, turnSpeed);
     }
     else {
-      currentLeft  = smooth(currentLeft, 0);
-      currentRight = smooth(currentRight, 0);
+      // Line lost → spin to search
+      currentLeft  = smooth(currentLeft, 120);
+      currentRight = smooth(currentRight, -120);
     }
 
     setMotor(currentLeft, currentRight);
   }
 
-  delay(1);
+  delay(5);
 }
