@@ -37,9 +37,11 @@ struct {
 #define IR_LEFT 34
 #define IR_RIGHT 35
 
-// Ultrasonic sensor pins
+// Ultrasonic Sensor Pins
 #define TRIG_PIN 5
 #define ECHO_PIN 18
+
+float duration_us, distance_cm;
 
 int currentLeft = 0;
 int currentRight = 0;
@@ -58,21 +60,6 @@ int smooth(int current, int target, int step = 10) {
   if (current < target) return min(current + step, target);
   if (current > target) return max(current - step, target);
   return current;
-}
-
-// Ultrasonic distance function
-long getDistance() {
-  digitalWrite(TRIG_PIN, LOW);
-  delayMicroseconds(2);
-
-  digitalWrite(TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
-
-  long duration = pulseIn(ECHO_PIN, HIGH, 30000); // timeout
-  long distance = duration * 0.034 / 2;
-
-  return distance; // cm
 }
 
 void setMotor(int left, int right) {
@@ -104,6 +91,26 @@ void setMotor(int left, int right) {
   analogWrite(ENB, right);
 }
 
+// 🔹 Ultrasonic function (UNCHANGED)
+float checkDistance() {
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+
+  duration_us = pulseIn(ECHO_PIN, HIGH);
+
+  distance_cm = 0.017 * duration_us;
+
+  return distance_cm;
+}
+
+// 🔹 Stop motors
+void stopMotors() {
+  setMotor(0, 0);
+}
+
 void setup() {
   Serial.begin(115200);
 
@@ -114,7 +121,6 @@ void setup() {
 
   pinMode(IR_LEFT, INPUT);
   pinMode(IR_RIGHT, INPUT);
-
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
 
@@ -123,6 +129,15 @@ void setup() {
 
 void loop() {
   RemoteXY_Handler();
+
+  // 🔴 ULTRASONIC CHECK (ADDED)
+  float dist = checkDistance();
+
+  if (dist > 0 && dist < 20) {
+    Serial.println("Obstacle detected! Stopping...");
+    stopMotors();
+    return;
+  }
 
   int x = RemoteXY.joystick_01_x;
   int y = RemoteXY.joystick_01_y;
@@ -136,24 +151,6 @@ void loop() {
   // ================= MANUAL MODE =================
   if (RemoteXY.switch_01 == 0) {
 
-    long distance = getDistance();
-
-    Serial.print("Distance: ");
-    Serial.println(distance);
-
-    int safetyDistance = 20; // cm
-
-    // 🚨 OBSTACLE DETECTED → STOP
-    if (distance > 0 && distance < safetyDistance) {
-      currentLeft  = smooth(currentLeft, 0);
-      currentRight = smooth(currentRight, 0);
-
-      setMotor(currentLeft, currentRight);
-      delay(5);
-      return;
-    }
-
-    // ✅ NORMAL MANUAL CONTROL
     int targetLeft  = speedY + speedX;
     int targetRight = speedY - speedX;
 
@@ -177,25 +174,21 @@ void loop() {
     int baseSpeed = 50;
     int turnSpeed = 50;
 
-    // 00 → FORWARD
     if (leftIR == LOW && rightIR == LOW) {
       currentLeft  = smooth(currentLeft, baseSpeed);
       currentRight = smooth(currentRight, baseSpeed);
     }
 
-    // 11 → STOP
     else if (leftIR == HIGH && rightIR == HIGH) {
       currentLeft  = smooth(currentLeft, 0);
       currentRight = smooth(currentRight, 0);
     }
 
-    // 10 → TURN LEFT
     else if (leftIR == HIGH && rightIR == LOW) {
       currentLeft  = smooth(currentLeft, turnSpeed);
       currentRight = smooth(currentRight, -turnSpeed);
     }
 
-    // 01 → TURN RIGHT
     else if (leftIR == LOW && rightIR == HIGH) {
       currentLeft  = smooth(currentLeft, -turnSpeed);
       currentRight = smooth(currentRight, turnSpeed);
