@@ -27,10 +27,10 @@ struct {
 
 // Motor pins
 #define IN1 19 
-#define IN2 17 
+#define IN2 12 
 #define IN3 22 
 #define IN4 23 
-#define ENA 16 
+#define ENA 13 
 #define ENB 21 
 
 // IR sensors
