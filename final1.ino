@@ -10,11 +10,11 @@
 
 #pragma pack(push, 1)
 
-uint8_t RemoteXY_CONF[] = 
-{ 
+uint8_t RemoteXY_CONF[] =
+{
   255,3,0,0,0,48,0,19,0,0,0,69,83,80,51,50,95,67,65,82,
   0,31,1,106,200,1,1,2,0,2,51,12,44,22,0,2,26,31,31,79,
-  78,0,79,70,70,0,5,12,65,60,60,32,2,26,31 
+  78,0,79,70,70,0,5,12,65,60,60,32,2,26,31
 };
 
 struct {
@@ -26,18 +26,18 @@ struct {
 #pragma pack(pop)
 
 // Motor pins
-#define IN1 19 
-#define IN2 12 
-#define IN3 22 
-#define IN4 23 
-#define ENA 13 
-#define ENB 21 
+#define IN1 19
+#define IN2 12
+#define IN3 22
+#define IN4 23
+#define ENA 13
+#define ENB 21
 
 // IR sensors
 #define IR_LEFT 34
 #define IR_RIGHT 35
 
-// Ultrasonic Sensor
+// Ultrasonic
 #define TRIG_PIN 5
 #define ECHO_PIN 18
 
@@ -56,17 +56,17 @@ void setupMotors() {
   pinMode(ENB, OUTPUT);
 }
 
-// ================= SMOOTH =================
-int smooth(int current, int target, int step = 25) {
+// Smooth ramp
+int smooth(int current, int target, int step = 10) {
   if (current < target) return min(current + step, target);
   if (current > target) return max(current - step, target);
   return current;
 }
 
-// ================= MOTOR CONTROL =================
+// Set motor speed
 void setMotor(int left, int right) {
 
-  // LEFT motor
+  // LEFT
   if (left >= 0) {
     digitalWrite(IN1, HIGH);
     digitalWrite(IN2, LOW);
@@ -76,7 +76,7 @@ void setMotor(int left, int right) {
     left = -left;
   }
 
-  // RIGHT motor
+  // RIGHT
   if (right >= 0) {
     digitalWrite(IN3, HIGH);
     digitalWrite(IN4, LOW);
@@ -101,15 +101,12 @@ float checkDistance() {
   delayMicroseconds(10);
   digitalWrite(TRIG_PIN, LOW);
 
-  duration_us = pulseIn(ECHO_PIN, HIGH, 30000); // timeout added
-
-  if (duration_us == 0) return 999; // no echo
-
+  duration_us = pulseIn(ECHO_PIN, HIGH);
   distance_cm = 0.017 * duration_us;
+
   return distance_cm;
 }
 
-// ================= STOP =================
 void stopMotors() {
   setMotor(0, 0);
 }
@@ -119,12 +116,13 @@ void setup() {
   Serial.begin(115200);
 
   WiFi.setSleep(false);
-
   RemoteXY_Init();
+
   setupMotors();
 
   pinMode(IR_LEFT, INPUT);
   pinMode(IR_RIGHT, INPUT);
+
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
 
@@ -135,45 +133,31 @@ void setup() {
 void loop() {
   RemoteXY_Handler();
 
-  // 🔴 Obstacle check
+  // ===== ULTRASONIC SAFETY =====
   float dist = checkDistance();
-  if (dist > 0 && dist < 20) {
+  Serial.print("Distance: ");
+  Serial.println(dist);
+
+  if (dist > 0 && dist < 15) {
+    Serial.println("Obstacle! STOP");
     stopMotors();
     return;
   }
 
-  // ================= MANUAL MODE =================
+  int x = RemoteXY.joystick_01_x;
+  int y = RemoteXY.joystick_01_y;
+
+  if (abs(x) < 5) x = 0;
+  if (abs(y) < 5) y = 0;
+
+  int speedX = map(x, -100, 100, -255, 255);
+  int speedY = map(y, -100, 100, -255, 255);
+
+  // ================= MANUAL =================
   if (RemoteXY.switch_01 == 0) {
 
-    int x = RemoteXY.joystick_01_x;
-    int y = RemoteXY.joystick_01_y;
-
-    // Dead zone
-    if (abs(x) < 20) x = 0;
-    if (abs(y) < 20) y = 0;
-
-    int targetLeft = 0;
-    int targetRight = 0;
-
-    // ❌ Diagonal → STOP
-    if (x != 0 && y != 0) {
-      targetLeft = 0;
-      targetRight = 0;
-    }
-
-    // ✅ Forward / Backward
-    else if (y != 0) {
-      int speed = map(y, -100, 100, -255, 255);
-      targetLeft = speed;
-      targetRight = speed;
-    }
-
-    // ✅ Left / Right turn (in place)
-    else if (x != 0) {
-      int turn = map(x, -100, 100, -255, 255);
-      targetLeft = turn;
-      targetRight = -turn;
-    }
+    int targetLeft  = speedY + speedX;
+    int targetRight = speedY - speedX;
 
     currentLeft  = smooth(currentLeft, targetLeft);
     currentRight = smooth(currentRight, targetRight);
@@ -181,35 +165,49 @@ void loop() {
     setMotor(currentLeft, currentRight);
   }
 
-  // ================= AUTO MODE =================
+  // ================= AUTO (LINE FOLLOW) =================
   else {
 
     int leftIR  = digitalRead(IR_LEFT);
     int rightIR = digitalRead(IR_RIGHT);
 
-    int baseSpeed = 120;   // increased speed
-    int turnSpeed = 120;
+    // 🔍 Debug
+    Serial.print("LEFT: ");
+    Serial.print(leftIR);
+    Serial.print(" | RIGHT: ");
+    Serial.println(rightIR);
+
+    int baseSpeed = 160;
+
+    // ⚠️ ASSUMPTION: LOW = BLACK, HIGH = WHITE
+    // If opposite → just swap LOW/HIGH below
 
     if (leftIR == LOW && rightIR == LOW) {
+      // Forward
       currentLeft  = smooth(currentLeft, baseSpeed);
       currentRight = smooth(currentRight, baseSpeed);
     }
 
     else if (leftIR == HIGH && rightIR == HIGH) {
+      // Stop (line lost)
       currentLeft  = smooth(currentLeft, 0);
       currentRight = smooth(currentRight, 0);
     }
 
     else if (leftIR == HIGH && rightIR == LOW) {
-      currentLeft  = smooth(currentLeft, turnSpeed);
-      currentRight = smooth(currentRight, -turnSpeed);
+      // Turn RIGHT
+      currentLeft  = smooth(currentLeft, -baseSpeed);
+      currentRight = smooth(currentRight, baseSpeed);
     }
 
     else if (leftIR == LOW && rightIR == HIGH) {
-      currentLeft  = smooth(currentLeft, -turnSpeed);
-      currentRight = smooth(currentRight, turnSpeed);
+      // Turn LEFT
+      currentLeft  = smooth(currentLeft, baseSpeed);
+      currentRight = smooth(currentRight, -baseSpeed);
     }
 
     setMotor(currentLeft, currentRight);
   }
+
+  delay(10);
 }
